@@ -20,7 +20,7 @@ touching the ECA core.
 ```
 projects/<name>/
 ├── AGENTS.md            goal, repos, local folders, conventions
-├── .eca/rules/          worktrees.md · library.md · export.md
+├── .eca/rules/          worktrees.md · library.md · export.md · workspace.md
 ├── .eca-desk            metadata (kind, local folders)
 ├── library/
 │   ├── user/            material you provide
@@ -84,6 +84,15 @@ eca-desk defines **no keybindings**. Bind what you use:
 | `eca-desk-open` | Pick an existing project/session; start or switch to its ECA session. Use `eca-chat-resume` inside to restore past conversations. |
 | `eca-desk-reference-chat` | Complete over every `library/chats/*.md` of all projects and sessions and insert a "read this file" instruction into the prompt. |
 | `eca-desk-export-chat` | Save the current chat transcript to the workspace's `library/chats/<name>-transcript.md` (wraps `eca-chat-save-to-file`). |
+| `eca-desk-add-repo` | Clone one more repository into the current project/session (taken from the live ECA session, else asked) and list it in `AGENTS.md`. No restart needed. |
+| `eca-desk-add-local-folder` | Register one more local folder: updates `.eca-desk` and `AGENTS.md`, and adds it to the live ECA session immediately. |
+
+The agent gets the same knowledge through `.eca/rules/workspace.md`, so
+asking "add repo owner/x to this project" in the chat works too; for
+local folders the agent will ask you to run `eca-desk-add-local-folder`,
+since only Emacs can change the session's workspace folders. Rules and
+`AGENTS.md` are loaded by the ECA server per workspace on every prompt,
+so they apply whatever agent or model is active, and to subagents.
 
 Repository input accepts a full URL (`git@host:o/r.git`,
 `https://…`, `file://…`) or the `owner/repo` shorthand, which expands to
@@ -121,7 +130,7 @@ Progress and git output go to the `*eca-desk*` buffer.
 Templates are embedded (`eca-desk-templates.el`) and can be overridden
 by placing a file with the same name in `eca-desk-template-directory`:
 `project-AGENTS.md`, `session-AGENTS.md`, `rules-worktrees.md`,
-`rules-library.md`, `rules-export.md`. Placeholders: `${name}`,
+`rules-library.md`, `rules-export.md`, `rules-workspace.md`. Placeholders: `${name}`,
 `${type}`, `${root}`, `${repos}`, `${local-folders}`, `${date}`.
 
 ## Notes on eca-emacs coupling

@@ -53,6 +53,9 @@
 ;;                              project/session into the current prompt
 ;;   `eca-desk-export-chat'     save the current chat transcript into the
 ;;                              workspace's library/chats/
+;;   `eca-desk-add-repo'        clone one more repository into the current
+;;                              project/session
+;;   `eca-desk-add-local-folder' register one more local folder
 ;;
 ;; Sample configuration:
 ;;
@@ -303,7 +306,7 @@ Return the workspace root."
       (make-directory (expand-file-name "library/user" root) t))
     (eca-desk--write-file (expand-file-name "AGENTS.md" root)
                           (eca-desk-templates-render (concat kind "-AGENTS.md") vars))
-    (dolist (rule '("worktrees" "library" "export"))
+    (dolist (rule '("worktrees" "library" "export" "workspace"))
       (eca-desk--write-file (expand-file-name (format ".eca/rules/%s.md" rule) root)
                             (eca-desk-templates-render (format "rules-%s.md" rule) vars)))
     (eca-desk--write-file (expand-file-name ".eca-desk" root)
@@ -323,6 +326,48 @@ Return the workspace root."
   "Return the directory holding clones under ROOT."
   (let ((kind (alist-get 'kind (eca-desk--read-metadata root))))
     (expand-file-name (if (equal kind "session") "repo" "repos") root)))
+
+(defun eca-desk--write-metadata (root meta)
+  "Overwrite the metadata file of ROOT with alist META."
+  (with-temp-file (expand-file-name ".eca-desk" root)
+    (insert (prin1-to-string meta))))
+
+(defun eca-desk--current-root ()
+  "Return the eca-desk workspace root of the live ECA session, else ask."
+  (or (when-let* ((session (ignore-errors (eca-session))))
+        (cl-find-if #'eca-desk--read-metadata
+                    (eca--session-workspace-folders session)))
+      (pcase-let ((`(,kind . ,name) (eca-desk--read-workspace "Workspace: ")))
+        (eca-desk--workspace-dir kind name))))
+
+(defun eca-desk--agents-append (root heading line)
+  "Append bullet LINE under the `## HEADING' section of ROOT's AGENTS.md.
+Replace a `(none)' placeholder when present.  Return nil when LINE is
+already there."
+  (let ((file (expand-file-name "AGENTS.md" root)))
+    (with-current-buffer (find-file-noselect file)
+      (save-excursion
+        (goto-char (point-min))
+        (if (search-forward line nil t)
+            nil
+          (goto-char (point-min))
+          (unless (re-search-forward (format "^## %s\\s-*$" (regexp-quote heading)) nil t)
+            (goto-char (point-max))
+            (insert (format "\n## %s\n\n" heading)))
+          (let ((end (save-excursion
+                       (or (re-search-forward "^## " nil t) (point-max)))))
+            (cond
+             ((re-search-forward "^(none)\\s-*$" end t)
+              (replace-match line t t))
+             (t
+              (goto-char end)
+              (unless (eq end (point-max)) (beginning-of-line))
+              (skip-chars-backward "\n")
+              (insert "\n" line)))
+            ;; Keep one blank line before the next heading.
+            (when (looking-at "\n## ") (insert "\n"))
+            (save-buffer)
+            t))))))
 
 ;;;; ECA integration
 
@@ -454,6 +499,48 @@ the full transcript on demand."
       (make-directory dir t)
       (eca-chat-save-to-file file)
       (message "Transcript saved to %s" file))))
+
+;;;###autoload
+(defun eca-desk-add-repo (spec)
+  "Clone repository SPEC into the current project or session.
+SPEC is a git URL or `owner/repo'.  The workspace is taken from the
+live ECA session, otherwise asked.  AGENTS.md is updated; no restart
+is needed since the clone lands inside the workspace."
+  (interactive (list (string-trim (read-string "Repository: "))))
+  (let* ((root (eca-desk--current-root))
+         (url (eca-desk--repo-url spec))
+         (repos-dir (eca-desk--repos-dir root))
+         (line (format "- `%s/%s` ← %s" (file-name-nondirectory repos-dir)
+                       (eca-desk--repo-name url) url)))
+    (eca-desk--clone-queue
+     (list url) repos-dir
+     (lambda (failed)
+       (if failed
+           (progn (display-buffer eca-desk--log-buffer)
+                  (message "Clone failed, see %s" eca-desk--log-buffer))
+         (eca-desk--agents-append root "Repositories" line)
+         (message "Added %s to %s" (eca-desk--repo-name url) root))))))
+
+;;;###autoload
+(defun eca-desk-add-local-folder (dir)
+  "Register local folder DIR with the current project or session.
+Updates `.eca-desk' and AGENTS.md and, when the ECA session is live,
+adds DIR as a workspace folder immediately."
+  (interactive (list (read-directory-name "Local folder: ")))
+  (let* ((dir (directory-file-name (expand-file-name dir)))
+         (root (eca-desk--current-root))
+         (meta (eca-desk--read-metadata root))
+         (folders (alist-get 'local-folders meta)))
+    (unless (file-directory-p dir) (user-error "Not a directory: %s" dir))
+    (if (member dir folders)
+        (message "%s is already registered" dir)
+      (setf (alist-get 'local-folders meta) (append folders (list dir)))
+      (eca-desk--write-metadata root meta)
+      (eca-desk--agents-append root "Local folders" (format "- `%s`" dir))
+      (when-let* ((session (eca-session-for-root root)))
+        (when (eq (eca--session-status session) 'started)
+          (eca--session-add-workspace-folder session dir)))
+      (message "Registered %s in %s" dir root))))
 
 (provide 'eca-desk)
 ;;; eca-desk.el ends here

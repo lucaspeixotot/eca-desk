@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `eca-desk-add-repo` and `eca-desk-add-local-folder` to grow a project or
+  session mid-conversation; AGENTS.md and `.eca-desk` are updated and live
+  sessions receive the new workspace folder.
+- Rule template `rules-workspace.md` teaching the agent the same procedure.
+
+### Changed
+
+- Use `when-let*` (Emacs 31 deprecates `when-let`).
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

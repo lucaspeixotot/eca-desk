@@ -90,6 +90,8 @@ ${local-folders}
   under `library/user/` — see `.eca/rules/library.md`.
 - When a significant task ends, write a curated summary to
   `library/chats/` — see `.eca/rules/export.md`.
+- To bring in more repositories or local folders mid-way, follow
+  `.eca/rules/workspace.md`.
 "
   "Default AGENTS.md for a project.")
 
@@ -117,6 +119,8 @@ ${local-folders}
 - Generated artifacts go to `library/agent/`.
 - On finishing, write a curated summary to `library/chats/` — see
   `.eca/rules/export.md`.
+- To bring in another repository or local folder, follow
+  `.eca/rules/workspace.md`.
 "
   "Default AGENTS.md for a session.")
 
@@ -188,12 +192,43 @@ on explicit request (`eca-desk-export-chat`).
 "
   "Default `.eca/rules/export.md'.")
 
+(defconst eca-desk-templates--rules-workspace
+  "# Growing the workspace
+
+The user may ask, mid-conversation, to bring another repository or local
+folder into this ${type}.  Handle it like this.
+
+## Adding a repository
+
+1. Clone it with minimal history into the repositories directory (`repos/`
+   for projects, `repo/` for sessions; sessions normally hold one repo —
+   confirm before adding a second):
+   `git clone --filter=blob:none <url> <repos-dir>/<name>`
+   Shorthand `owner/repo` means `git@github.com:owner/repo.git` unless the
+   user says which host to use.
+2. Append a line to the `## Repositories` list in `AGENTS.md`:
+   `- \\`repos/<name>\\` ← <url>`
+3. The clone is already inside the workspace; no restart is needed.
+
+The user can do the same from Emacs with `M-x eca-desk-add-repo`.
+
+## Adding a local folder
+
+Local folders are **not copied**; they must become workspace folders, and
+you cannot do that yourself.  Ask the user to run
+`M-x eca-desk-add-local-folder` — it registers the path in `.eca-desk`,
+appends it to `## Local folders` in `AGENTS.md` and adds it to the running
+session.  Until then, do not read or edit files under that folder.
+"
+  "Default `.eca/rules/workspace.md'.")
+
 (defconst eca-desk-templates--alist
   `(("project-AGENTS.md" . ,eca-desk-templates--project-agents)
     ("session-AGENTS.md" . ,eca-desk-templates--session-agents)
     ("rules-worktrees.md" . ,eca-desk-templates--rules-worktrees)
     ("rules-library.md" . ,eca-desk-templates--rules-library)
-    ("rules-export.md" . ,eca-desk-templates--rules-export))
+    ("rules-export.md" . ,eca-desk-templates--rules-export)
+    ("rules-workspace.md" . ,eca-desk-templates--rules-workspace))
   "Alist of template NAME to embedded content.")
 
 ;;;; API
