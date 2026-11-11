@@ -194,27 +194,57 @@ chosen from `eca-desk-git-ssh-hosts' or defaults to github.com."
                                        (replace-regexp-in-string ":" "/" url)))))
     (if (string-suffix-p ".git" base) (substring base 0 -4) base)))
 
+(defvar eca-desk--repo-history nil
+  "Minibuffer history of repository specs.")
+
+(defun eca-desk--known-repo-urls ()
+  "Return origin URLs of repositories already cloned in any workspace."
+  (cl-loop for (kind . name) in (eca-desk--list-workspaces)
+           for dir = (expand-file-name (if (string= kind "session") "repo" "repos")
+                                       (eca-desk--workspace-dir kind name))
+           when (file-directory-p dir)
+           append (cl-loop for repo in (directory-files dir t "\\`[^.]")
+                           for url = (and (file-directory-p (expand-file-name ".git" repo))
+                                          (with-temp-buffer
+                                            (when (zerop (call-process "git" nil t nil "-C" repo
+                                                                       "remote" "get-url" "origin"))
+                                              (string-trim (buffer-string)))))
+                           when (and url (not (string-empty-p url))) collect url)))
+
 (defun eca-desk--read-repos (prompt)
-  "Repeatedly ask for repository specs with PROMPT until empty input.
-Return a list of expanded URLs."
-  (let (urls spec)
-    (while (not (string-empty-p
-                 (setq spec (string-trim
-                             (read-string (format "%s (empty to finish): " prompt))))))
-      (push (eca-desk--repo-url spec) urls))
-    (nreverse urls)))
+  "Ask for repository specs with PROMPT, comma separated.
+Completion offers repositories already cloned in other workspaces and
+the input history.  Return a list of expanded URLs."
+  (let* ((candidates (delete-dups (append eca-desk--repo-history
+                                          (eca-desk--known-repo-urls))))
+         (specs (completing-read-multiple
+                 (format "%s (comma separated, empty for none): " prompt)
+                 candidates nil nil nil 'eca-desk--repo-history)))
+    (mapcar #'eca-desk--repo-url
+            (cl-remove-if #'string-empty-p (mapcar #'string-trim specs)))))
+
+(defun eca-desk--read-repo (prompt)
+  "Ask for a single optional repository spec with PROMPT.
+Return the expanded URL or nil."
+  (let ((spec (string-trim
+               (completing-read (format "%s (optional): " prompt)
+                                (delete-dups (append eca-desk--repo-history
+                                                     (eca-desk--known-repo-urls)))
+                                nil nil nil 'eca-desk--repo-history))))
+    (unless (string-empty-p spec) (eca-desk--repo-url spec))))
 
 (defun eca-desk--read-local-folders ()
-  "Repeatedly ask for local folders until empty input.
+  "Repeatedly ask for local folders until RET on an empty prompt.
 Return a list of absolute directory paths."
-  (let (dirs dir)
+  (let (dirs dir (n 1))
     (while (not (string-empty-p
                  (setq dir (string-trim
                             (read-directory-name
-                             "Local folder (empty to finish): " nil "" nil)))))
+                             (format "Local folder #%d (RET on empty to finish): " n)
+                             nil "" nil)))))
       (setq dir (expand-file-name dir))
       (if (file-directory-p dir)
-          (push (directory-file-name dir) dirs)
+          (progn (push (directory-file-name dir) dirs) (cl-incf n))
         (message "Not a directory, skipped: %s" dir)))
     (nreverse dirs)))
 
@@ -398,12 +428,10 @@ With a prefix argument only scaffold; otherwise also start ECA."
     (when (and existing
                (not (y-or-n-p (format "%s %s exists; resume/fix scaffold? " kind name))))
       (user-error "Aborted"))
-    (let* ((urls (eca-desk--read-repos
-                  (if (string= kind "project") "Repository" "Repository (single, optional)")))
-           (urls (if (and (string= kind "session") (cdr urls))
-                     (progn (message "Sessions take one repo; using %s" (car urls))
-                            (list (car urls)))
-                   urls))
+    (let* ((urls (if (string= kind "project")
+                     (eca-desk--read-repos "Repositories")
+                   (let ((u (eca-desk--read-repo "Repository")))
+                     (and u (list u)))))
            (local-folders (eca-desk--read-local-folders))
            (root (eca-desk--scaffold kind name urls local-folders)))
       (message "Scaffolded %s at %s%s" kind root
@@ -501,25 +529,30 @@ the full transcript on demand."
       (message "Transcript saved to %s" file))))
 
 ;;;###autoload
-(defun eca-desk-add-repo (spec)
-  "Clone repository SPEC into the current project or session.
-SPEC is a git URL or `owner/repo'.  The workspace is taken from the
-live ECA session, otherwise asked.  AGENTS.md is updated; no restart
-is needed since the clone lands inside the workspace."
-  (interactive (list (string-trim (read-string "Repository: "))))
+(defun eca-desk-add-repo (urls)
+  "Clone one or more repositories URLS into the current project or session.
+Interactively, specs are read comma separated (git URLs or
+`owner/repo').  The workspace is taken from the live ECA session,
+otherwise asked.  AGENTS.md lists each successful clone; no restart is
+needed since clones land inside the workspace."
+  (interactive (list (eca-desk--read-repos "Repositories")))
+  (unless urls (user-error "No repository given"))
   (let* ((root (eca-desk--current-root))
-         (url (eca-desk--repo-url spec))
-         (repos-dir (eca-desk--repos-dir root))
-         (line (format "- `%s/%s` ← %s" (file-name-nondirectory repos-dir)
-                       (eca-desk--repo-name url) url)))
+         (repos-dir (eca-desk--repos-dir root)))
     (eca-desk--clone-queue
-     (list url) repos-dir
+     urls repos-dir
      (lambda (failed)
+       (dolist (url (cl-set-difference urls failed :test #'string=))
+         (eca-desk--agents-append
+          root "Repositories"
+          (format "- `%s/%s` ← %s" (file-name-nondirectory repos-dir)
+                  (eca-desk--repo-name url) url)))
        (if failed
            (progn (display-buffer eca-desk--log-buffer)
-                  (message "Clone failed, see %s" eca-desk--log-buffer))
-         (eca-desk--agents-append root "Repositories" line)
-         (message "Added %s to %s" (eca-desk--repo-name url) root))))))
+                  (message "%d clone(s) failed, see %s" (length failed)
+                           eca-desk--log-buffer))
+         (message "Added %d repositor%s to %s" (length urls)
+                  (if (cdr urls) "ies" "y") root))))))
 
 ;;;###autoload
 (defun eca-desk-add-local-folder (dir)

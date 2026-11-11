@@ -79,7 +79,7 @@ eca-desk defines **no keybindings**. Bind what you use:
 | Command | Does |
 |---|---|
 | `eca-desk-chat` | Open (or reuse) the scratch ECA session and start a new chat tab. |
-| `eca-desk-new-project` | name → repositories (repeat, empty to finish) → local folders (repeat). Scaffolds, clones asynchronously, starts ECA and sends `eca-desk-initial-prompt`. `C-u` = scaffold only. |
+| `eca-desk-new-project` | name → repositories (one prompt, **comma separated**, with completion over repos already cloned elsewhere and history) → local folders (one per prompt, RET on empty to finish). Scaffolds, clones asynchronously, starts ECA and sends `eca-desk-initial-prompt`. `C-u` = scaffold only. |
 | `eca-desk-new-session` | Same flow with a single optional repository. |
 | `eca-desk-open` | Pick an existing project/session; start or switch to its ECA session. Use `eca-chat-resume` inside to restore past conversations. |
 | `eca-desk-reference-chat` | Complete over every `library/chats/*.md` of all projects and sessions and insert a "read this file" instruction into the prompt. |

@@ -14,6 +14,10 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
+- Repositories are read in one prompt with `completing-read-multiple`
+  (comma separated), offering repos already cloned in other workspaces and
+  history; `eca-desk-add-repo` accepts a list. Sessions ask for a single
+  optional repo. Local folder prompt numbered and clearer.
 - Use `when-let*` (Emacs 31 deprecates `when-let`).
 
 ## [0.1.0] - 2026-11-11
