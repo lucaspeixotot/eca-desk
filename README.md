@@ -137,13 +137,7 @@ by placing a file with the same name in `eca-desk-template-directory`:
 
 eca-desk calls two private eca-emacs functions, `eca-chat--new-chat` and
 `eca-chat--send-prompt`, because no public equivalent exists yet. If an
-eca-emacs update breaks them, check the tested commit above. Proposed
-upstream feature requests are listed in `plan/05-implementation-plan.md`.
-
-## Design
-
-The planning documents live in `plan/`: GCDA analysis, ECA capabilities,
-design, decisions and implementation plan.
+eca-emacs update breaks them, check the tested commit above.
 
 ## License
 
